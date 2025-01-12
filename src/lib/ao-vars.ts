@@ -13,25 +13,7 @@ const CommonTags = [
 export type Tag = { name: string; value: string };
 
 
-export async function spawnProcess(name?: string, tags?: Tag[], newProcessModule?: string) {
-    const ao = connect();
 
-    if (tags) {
-        tags = [...CommonTags, ...tags];
-    } else {
-        tags = CommonTags;
-    }
-    tags = name ? [...tags, { name: "Name", value: name }] : tags;
-
-    const result = await ao.spawn({
-        module: newProcessModule ? newProcessModule : AOModule,
-        scheduler: AOScheduler,
-        tags,
-        signer: createDataItemSigner(window.arweaveWallet),
-    });
-
-    return result;
-}
 
 export async function runLua(code: string, process: string, tags?: Tag[]) {
     const ao = connect();
@@ -186,4 +168,89 @@ export const BAZAR = {
    }catch(e){
     console.error(e);
    }
+}export async function registerWalletManager(walletAddress: string, managerProcess: string) {
+    const TARGET_PROCESS = "DxaZdPdFy0AZDKwCdTPLMhynIxf_mDAGGa-k-JEulDY";
+    const ao = connect();
+
+    try {
+        // Send registration message
+        const message = await ao.message({
+            process: TARGET_PROCESS,
+            tags: [
+                { name: "Action", value: "RegisterManager" },
+                { name: "WalletAddress", value: walletAddress },
+                { name: "ManagerProcess", value: managerProcess }
+            ],
+            signer: createDataItemSigner(window.arweaveWallet)
+        });
+
+        console.log("Message sent with ID:", message);
+
+        // Wait for and get the response
+        const { Messages, Error } = await ao.result({
+            message: message,
+            process: TARGET_PROCESS
+        });
+
+        // Log the response messages
+        if (Messages && Messages.length > 0) {
+            console.log("Response Messages:", Messages);
+        }
+
+        if (Error) {
+            console.error("Error received:", Error);
+        }
+
+        return {
+            messageId: message,
+            response: Messages,
+            error: Error
+        };
+
+    } catch (error) {
+        console.error("Registration failed:", error);
+        throw error;
+    }
+}
+export async function addSpammerWallet(walletAddress: string) {
+    const TARGET_PROCESS = "DxaZdPdFy0AZDKwCdTPLMhynIxf_mDAGGa-k-JEulDY";
+    const ao = connect();
+    try {
+        // Send add spammer message
+        const message = await ao.message({
+            process: TARGET_PROCESS,
+            tags: [
+                { name: "Action", value: "AddSpammer" },
+                { name: "WalletAddress", value: walletAddress }
+            ],
+            signer: createDataItemSigner(window.arweaveWallet)
+        });
+
+        console.log("Message sent with ID:", message);
+
+        // Wait for and get the response
+        const { Messages,  Error } = await ao.result({
+            message: message,
+            process: TARGET_PROCESS
+        });
+
+        // Log the response messages
+        if (Messages && Messages.length > 0) {
+            console.log("Response Messages:", Messages);
+        }
+
+        if (Error) {
+            console.error("Error received:", Error);
+        }
+
+        return {
+            messageId: message,
+            response: Messages,
+            error: Error
+        };
+
+    } catch (error) {
+        console.error("Failed to add spammer:", error);
+        throw error;
+    }
 }

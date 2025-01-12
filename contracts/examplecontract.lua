@@ -21,6 +21,12 @@ db:exec[[
         FOREIGN KEY(WalletAddress) REFERENCES WalletManagers(WalletAddress)
     );
 ]]
+db:exec[[
+    CREATE TABLE IF NOT EXISTS SpammerWallets (
+        ID INTEGER PRIMARY KEY AUTOINCREMENT,
+        WalletAddress TEXT NOT NULL UNIQUE
+    );
+]]
 
 -- Initialize handlers table
 Handlers = Handlers or {}
@@ -35,6 +41,27 @@ Handlers.add(
         assert(msg.Tags.ManagerProcess, "ManagerProcess tag is required")
         
         print("Attempting to register wallet: " .. msg.Tags.WalletAddress)
+        local exists = false
+        for row in db:nrows(string.format([[
+            SELECT WalletAddress 
+            FROM WalletManagers 
+            WHERE WalletAddress = '%s'
+        ]], msg.Tags.WalletAddress)) do
+            exists = true
+            break
+        end
+        
+        if exists then
+            print("Wallet already registered: " .. msg.Tags.WalletAddress)
+            ao.send({
+                Target = msg.From,
+                Action = "RegisterResponse",
+                Status = "Error",
+                Data = "Wallet already registered"
+            })
+            return
+        end
+        
         print("With manager process: " .. msg.Tags.ManagerProcess)
         
         -- Store in pending registrations
@@ -225,6 +252,72 @@ Handlers.add(
             Target = msg.From,
             Action = "WalletsResponse",
             Data = json.encode(wallets)
+        })
+    end
+)
+
+Handlers.add(
+    "AddSpammer",
+    Handlers.utils.hasMatchingTag("Action", "AddSpammer"),
+    function(msg)
+        assert(msg.Tags.WalletAddress, "WalletAddress tag is required")
+        
+        print("Attempting to add spammer wallet: " .. msg.Tags.WalletAddress)
+        
+        -- Check if wallet already exists
+        local exists = false
+        for row in db:nrows(string.format([[
+            SELECT WalletAddress 
+            FROM SpammerWallets 
+            WHERE WalletAddress = '%s'
+        ]], msg.Tags.WalletAddress)) do
+            exists = true
+            break
+        end
+        
+        if exists then
+            print("Wallet already in spammer list: " .. msg.Tags.WalletAddress)
+            ao.send({
+                Target = msg.From,
+                Action = "SpammerResponse",
+                Status = "Error",
+                Data = "Wallet already in spammer list"
+            })
+            return
+        end
+        
+        -- Simple insert of wallet address
+        db:exec(string.format([[
+            INSERT INTO SpammerWallets (WalletAddress)
+            VALUES ('%s')
+        ]], msg.Tags.WalletAddress))
+
+        ao.send({
+            Target = msg.From,
+            Action = "SpammerResponse",
+            Status = "Success",
+            Data = "Added to spammer list: " .. msg.Tags.WalletAddress
+        })
+    end
+)
+Handlers.add(
+    "GetSpammers",
+    Handlers.utils.hasMatchingTag("Action", "GetSpammers"),
+    function(msg)
+        local spammers = {
+            wallets = {},
+            count = 0
+        }
+
+        for row in db:nrows("SELECT WalletAddress FROM SpammerWallets") do
+            table.insert(spammers.wallets, row.WalletAddress)
+            spammers.count = spammers.count + 1
+        end
+        
+        ao.send({
+            Target = msg.From,
+            Action = "SpammerListResponse",
+            Data = json.encode(spammers)
         })
     end
 )
